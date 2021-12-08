@@ -1,0 +1,9 @@
+NUMBER_OF_SIMULATION_DAY = 365
+N_OF_EC = 5
+SIM_DEBUG = True
+AVERAGE_GIVEN_DATA = True
+REINFORCEMENT_ONLINE = False
+REWARD_WINDOW_SIZE = 1
+
+method_list_rl = ["Q"]
+print("CONFIGURATION FILE::{}\t AVG:{}".format(__file__, AVERAGE_GIVEN_DATA), flush=True)
