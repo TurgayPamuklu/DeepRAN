@@ -14,13 +14,13 @@ traffic_rate_list = [2]
 method_list_rl = ["Q", "E", "S"]
 method_list_static = ["CRAN", "URF1", "URF2", "DRAN"]
 method_list_milp = ["TA", "BA"]
-#Learning Method Parameters
-NUMBER_OF_EPISODES_CONF = 2000
-SHOW_EVERY_CONF = 200
+# Learning Method Parameters
+NUMBER_OF_EPISODES_CONF = 100
+SHOW_EVERY_CONF = 10
 LEARNING_RATE_SIZE_CONF = 1
 DISCOUNT_SIZE_CONF = 1
 # Others
 SIM_DEBUG = False
 DEBUGGING_ALLOW = False
 SECOND_PHASE_UPDATE = False
-REWARD_WINDOW_SIZE = 24
+REWARD_WINDOW_SIZE = 1
