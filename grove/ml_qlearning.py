@@ -15,11 +15,13 @@ class Logger:
     """
 
     def __init__(self, learning_method, learning_rate, discount, sp, batt, city, traffic_rate):
-        self.conf_name = "{}_{}_{}_{}_{}_{}_{}".format(learning_method, learning_rate, discount, sp, batt, city,
-                                                       traffic_rate)
+        self.conf_name = "{}_{}_{}_{}_{}_{}_{}".format(learning_method, learning_rate, discount, sp, batt, city, traffic_rate)
         self.ep_rewards_list = [[] for x in range(N_OF_CLOUD)]
         self.total_reward_in_an_episode = [0 for x in range(N_OF_CLOUD)]
         self.aggr_ep_rewards = [{'ep': [], 'avg': [], 'min': [], 'max': []} for x in range(N_OF_CLOUD)]
+        # self.highest_q_table = (-1, VERY_BIG_NEGATIVE_VALUE, [None for x in range(N_OF_CLOUD)])
+        # self.q_table_history = [(-1, VERY_BIG_NEGATIVE_VALUE, [None for x in range(N_OF_CLOUD)])]
+        # self.battery_history = [(-1, VERY_BIG_NEGATIVE_VALUE, [None for x in range(N_OF_CLOUD)])]
         self.q_table_history = []
         self.battery_history = []
         # --------- DEBUG ------------
@@ -49,6 +51,7 @@ class Logger:
         self.q_table_history.append((episode_record_number, obj_func, end_of_ep_q_tables))
         self.battery_history.append((episode_record_number, obj_func, end_of_ep_battery_history))
 
+
     def add_the_episode_reward(self, episode, ag_cloud, env):
         for ec_index in range(N_OF_CLOUD):
             self.ep_rewards_list[ec_index].append(self.total_reward_in_an_episode[ec_index])
@@ -75,7 +78,7 @@ class Logger:
                 # --------- DEBUG ------------
                 ret1 = np.copy(self.ret_record)
                 urf1 = np.copy(self.urf_record)
-                print("episode:{} urf1:{}".format(episode, sum(urf1[0])))
+                print("episode:{} ret1:{} urf1:{}".format(episode, sum(ret1), sum(urf1)))
                 self.urf_record = np.zeros_like(self.urf_record)
                 # --------- DEBUG ------------
 
@@ -114,8 +117,7 @@ class QLearning:
 
     def __init__(self, learning_method, learning_rate, discount, conf, city, traffic_rate):
         print("Learning_Method:{} Learning Rate:{} Discount:{} City:{} Traffic Rate:{}".format(learning_method,
-                                                                                               learning_rate, discount,
-                                                                                               city, traffic_rate))
+                                                                                               learning_rate, discount, city, traffic_rate))
         print("Sizing:{}".format(conf))
         self.sp = conf[0][0]
         self.batt = conf[0][1]
@@ -176,6 +178,8 @@ class QLearning:
     def __choose_the_action(self, ec_index, current_state, epsilon):
         if np.random.random() > epsilon:
             action = np.argmax(self.agent_cloud[ec_index].q_table[current_state])
+            # action = np.argmin(self.agent_cloud[ec_index].q_table[current_state])
+            # action = np.random.randint(0, self.agent_cloud.actions.size)
         else:
             action = np.random.randint(0, self.agent_cloud[ec_index].actions.size)
         return action
@@ -227,14 +231,43 @@ class QLearning:
                 self.logger.total_reward_in_an_episode[ec_index] += reward
             # increase the hour
             self.env_cloud.time_machine.next_hour()
-            # update the day of the year in the midnight
+            day = self.env_cloud.time_machine.get_day_of_the_year()
+
+    def run_one_year_dqn(self, epsilon, episode):
+        remaining_energy, traffic_load, time_slot = self.env_cloud.reset(self.sp, self.batt)
+        current_state = self.agent_dqn.get_discrete_state(remaining_energy, traffic_load, time_slot)
+        done = False
+        day = 0
+        while day < NUMBER_OF_SIMULATION_DAY:
+
+            action = self.agent_dqn.act(current_state)
+            renewable_energy_ratio, number_of_active_urf = self.env_cloud.disaggr_action(action)
+            remaining_energy, traffic_load, time_slot, reward = self.env_cloud.step_dqn(number_of_active_urf,
+                                                                                        renewable_energy_ratio)
+            new_state = self.agent_dqn.get_discrete_state(remaining_energy, traffic_load, time_slot)
+
+            # add to experience memory
+            self.agent_dqn.remember(current_state, action, reward, new_state, done)
+
+            current_state = new_state
+            self.logger.total_reward_in_an_episode[0] += reward
+            if done:
+                # update target model if goal is found
+                self.agent_dqn.update_target_model()
+                # print("episode: {}/{}, score: {}, e: {:.2}"
+                #       .format(e, EPISODES, time, self.agent_dqn.epsilon))
+                # break
+
+            self.env_cloud.time_machine.next_hour()
             day = self.env_cloud.time_machine.get_day_of_the_year()
 
     def main_loop(self):
         # Running each episode with epsilon greedy policy
         epsilon = LearningParameters.initial_epsilon()
+        if "DQN" in method_list_rl:
+            self.agent_dqn = DQNAgent(self.env_cloud.state_space_size, self.env_cloud.action_space_size)
         for episode in range(LearningParameters.NUMBER_OF_EPISODES):
-            self.run_one_year(epsilon, episode)
+            self.run_one_year_dqn(epsilon, episode)
             epsilon = LearningParameters.decrement_epsilon(epsilon)
             self.logger.add_the_episode_reward(episode, self.agent_cloud, self.env_cloud)
         self.logger.save_log()
@@ -394,6 +427,7 @@ def reinforcement_online():
 
 
 if __name__ == '__main__':
+    random.seed(8)  # same seed:: battery and solar panel sizing
     if REINFORCEMENT_ONLINE:
         # Testing the q learning and milp solutions by running them for one year
         reinforcement_online()
@@ -402,7 +436,6 @@ if __name__ == '__main__':
         db.print()
         db.record_to_file()
         sys.exit()
-
     print("Reinforcement starts:{}".format(datetime.now()))
     # **************************************** RL RUN  ****************************************
     multi_process = False

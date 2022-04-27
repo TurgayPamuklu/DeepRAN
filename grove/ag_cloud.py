@@ -1,6 +1,100 @@
-"""Main Module for Agents in RLDFS ICC Paper.
-"""
+import random
+from collections import deque
+
+import numpy as np
+from keras import backend as K
+from keras.layers import Dense
+from keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+
 from helpers import *
+
+
+class DQNAgent:
+    def __init__(self, state_size, action_size):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.memory = deque(maxlen=2000)
+        self.gamma = 0.95  # discount rate
+        self.epsilon = 1.0  # exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.99
+        self.learning_rate = 0.001
+
+        # model network-->>action=NN.predict(state)
+        self.model = self._build_model()
+
+        # target network -->>target=NN.predict(state)
+        self.target_model = self._build_model()
+
+        self.update_target_model()
+
+    def _huber_loss(self, target, prediction):
+        # sqrt(1+error^2)-1
+        error = prediction - target
+        return K.mean(K.sqrt(1 + K.square(error)) - 1, axis=-1)
+
+    def _build_model(self):
+
+        # Neural Net for Deep-Q learning Model
+        model = Sequential()
+        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(self.action_size, activation='linear'))
+        model.compile(loss=self._huber_loss,
+                      optimizer=Adam(lr=self.learning_rate))
+        return model
+
+    def update_target_model(self):
+        # copy weights from model to target_model
+        self.target_model.set_weights(self.model.get_weights())
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+
+        # select random action with prob=epsilon else action=maxQ
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+        act_values = self.model.predict(state)
+        return np.argmax(act_values[0])  # returns action
+
+    def replay(self, batch_size):
+
+        # sample random transitions
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+
+            # calculate target for each minibatch
+            target = self.model.predict(state)
+
+            if done:
+                target[0][action] = reward
+            else:
+                # action from model network
+                a = self.model.predict(next_state)[0]
+                # target from target network
+                t = self.target_model.predict(next_state)[0]
+                target[0][action] = reward + self.gamma * t[np.argmax(a)]  # belmann
+
+            # train model network
+            self.model.fit(state, target, epochs=1, verbose=0)
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+    def load(self, name):
+        self.model.load_weights(name)
+
+    def save(self, name):
+        self.model.save_weights(name)
+
+    def get_discrete_state(self, remaining_energy, traffic_load, time_slot):
+        s = remaining_energy + traffic_load + [time_slot]
+        state = np.array(s)
+        # self.diagnose_state_distribution(sch_delay)
+        return state
 
 
 class States:
@@ -15,9 +109,11 @@ class States:
         self.QUANTIZATION_REM_EN = 2 # 0.2
         self.QUANTIZATION_TR_LOAD = 0 # 5
         self.batt = batt
-        self.remaining_energy_level = np.array([x * self.QUANTIZATION_REM_EN for x in range(6)]) * self.batt
+        self.remaining_energy_level = np.array([x * self.QUANTIZATION_REM_EN for x in range(1)]) * self.batt
+        # self.remaining_energy_level = np.array([x * self.QUANTIZATION_REM_EN for x in range(6)]) * self.batt
         self.time_slot = np.array([x for x in range(NUMBER_OF_TIME_SLOT_IN_ONE_DAY)])
-        self.traffic_load = np.array([x for x in range(6)])
+        # self.traffic_load = np.array([x for x in range(6)])
+        self.traffic_load = np.array([x for x in range(1)])
         if self.ELEC_PRICE_STATE:
             self.elec_price = np.array([x for x in range(3)])
             self.size = self.time_slot.size * self.remaining_energy_level.size * self.elec_price.size
@@ -70,6 +166,10 @@ class StatesCC(States):
 class Actions:
     if DEBUGGING_ALLOW:
         ACTION_REN_EN_RATIO_LIST = [0, 0.5, 1]
+        # ACTION_REN_EN_RATIO_LIST = [1]
+        # ACTION_REN_EN_RATIO_LIST = [x * 0.1 for x in range(11)]
+        # ACTION_REN_EN_RATIO_LIST = [1]
+        # ACTION_REN_EN_RATIO_LIST = [0, 0.25, 0.50, 0.75, 1]
     else:
         ACTION_REN_EN_RATIO_LIST = [0, 0.5, 1]
     renewable_energy_ratio = None
@@ -78,7 +178,11 @@ class Actions:
         if learning_method in method_list_static:
             self.renewable_energy_ratio = np.array([1.0])
         else:
-            self.renewable_energy_ratio = np.array(self.ACTION_REN_EN_RATIO_LIST)
+            self.renewable_energy_ratio = np.array([1.0])  # fixme
+            # if DEBUGGING_ALLOW:
+            #     self.renewable_energy_ratio = np.array([1.0])
+            # else:
+            #     self.renewable_energy_ratio = np.array(self.ACTION_REN_EN_RATIO_LIST)
 
     def get_renewable_energy_ratio(self, action):
         return self.renewable_energy_ratio[action % len(self.renewable_energy_ratio)]
@@ -141,7 +245,7 @@ class Cloud:
     # @PerformanceCalculator
     def get_discrete_state(self, remaining_energy, time_slot, traffic_load):
         # combined_state = self.states.get_combined_state(rem_level, time_slot, elec_price)
-        # print("Input:\n", remaining_energy, traffic_load, time_slot)
+        # print("Input:\n", remen_ratio, traffic_load, time_slot)
         rem_level = int(np.rint(remaining_energy / (self.states.QUANTIZATION_REM_EN * self.states.batt)))
         tl_level = int(np.rint(traffic_load * self.states.QUANTIZATION_TR_LOAD))
         if tl_level > 5:

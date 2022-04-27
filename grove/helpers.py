@@ -1,7 +1,6 @@
 """helpers module.
 Classes in this module are general classes that are used often by other classes in the project.
-DON'T comment the default configuration file!
-__uncomment__  a configuration file to use it.
+
 """
 import os
 import pickle as pickle
@@ -29,25 +28,26 @@ N_OF_CLOUD = (N_OF_EC + 1)
 NUMBER_OF_UE_PER_EC = 1  # Number of User Chunk in one EC
 N_OF_URF = 3
 N_OF_PACKET_TYPE = 2
-REWARD_NORMALIZER = -1000000.0
+# REWARD_NORMALIZER = -1000000.0
+REWARD_NORMALIZER = 1000.0
 OUTPUT_FOLDER = '../output/'
-
 
 
 class PowerCons:
     TRY2DOLLAR = 8
     ELEC_PRICE = [x / 8 for x in [0.25] * 6 + [0.52] * 11 + [0.87] * 5 + [0.25] * 2]
     # ELEC_PRICE = [x / 8 for x in [0.71] * 24]
-    P_EC_STA = 5
-    P_EC_DYN = 1
-    P_CC_STA = 10
+    P_EC_STA = 10e-4  # 5  fixme:
+    P_EC_DYN = 0
+    P_CC_STA = 10e-4  # 10 fixme:
     P_CC_DYN = 1
     USER_CHUNK_SIZE = 10000
     GOPS_VALUE_PER_URF = 0.033
     GOPS_2_WATT_CONVERTER = 8
-    CENTRALIZATION_FACTOR = 0.9
-    SOLAR_PANEL_BASE = SOLAR_PANEL_BASE_CONF
-    BATTERY_BASE = BATTERY_BASE_CONF
+    # CENTRALIZATION_FACTOR = 0.9  # 0.9
+    CENTRALIZATION_FACTOR = 100000.0
+    SOLAR_PANEL_BASE = SOLAR_PANEL_BASE_CONF  # 0.1 fixme: normally it is 100 but we want to get kW
+    BATTERY_BASE = BATTERY_BASE_CONF  # 100 is default
     SOLAR_PANEL_INCR = SOLAR_PANEL_BASE
     BATTERY_INCR = BATTERY_BASE
     SOLAR_PANEL_INSTANCE_SIZE = SOLAR_PANEL_INSTANCE_SIZE_CONF
@@ -111,7 +111,7 @@ class LearningParameters:
     LEARNING_RATE_INCR = 0.05
     DISCOUNT_INCR = 0.05
     EPSILON = 0.5
-    EPSILON_DECAY_VALUE = EPSILON / int(0.9 * NUMBER_OF_EPISODES)
+    EPSILON_DECAY_VALUE = EPSILON / int(0.95 * NUMBER_OF_EPISODES)
 
     @staticmethod
     def initial_epsilon():

@@ -21,6 +21,7 @@ class SolarEnergy:
 
     def get_solar_energy(self, day_of_the_year, hour_of_the_day, panel_size):
         day_of_the_year = day_of_the_year % NUMBER_OF_SIMULATION_DAY
+        # day_of_the_year = 50  # fixme: del it
         return self.whole_year_energy[day_of_the_year][hour_of_the_day] * panel_size
 
     def get_average_regeneration_energy_in_a_day(self, panel_size):
@@ -43,10 +44,12 @@ class SolarEnergy:
                 if csv_reader.line_num > 19:
                     hour_field = int(row[0].split('","')[2])  # row is a list with one element
                     if hour_of_the_day != int(hour_field):
+                        # raise Exception("Houston we have a problem: the hour order in the csv file is not true!!") # csv file is really has error !!
                         print("Houston we have a problem: the hour order in the csv file is not true!! day_of_the_year:{} and hour_of_the_day:{}".format(
                             day_of_the_year, hour_of_the_day))
                     ac_watt_field = float(row[0].split('","')[9].replace('"', ''))  # row is a list with one element
-                    random_val = (np.random.poisson(10)) / 140.0
+                    # random_val = (np.random.poisson(10)) / 140.0    #fixme: check that why we randomize the data
+                    random_val = 0
                     ac_watt_data[day_of_the_year][hour_of_the_day] = ac_watt_field * (1 + random_val)
                     hour_of_the_day += 1
                     if hour_of_the_day == 24:
@@ -153,6 +156,11 @@ class Battery:
         self.fm = BatteryFlashMemory()  # flash memory is erased
         self.time_machine = TimeMachine.get_instance()
 
+    def get_the_fossil_en_cons(self):
+        history = self.fm.history[-1]
+        hour_of_the_day = history[1]
+        return history[3] * self.energy_prices_per_hour[hour_of_the_day]
+
     def get_the_last_24_hour_consumptions(self):
         total_data_len = REWARD_WINDOW_SIZE
         print_the_history = False
@@ -190,6 +198,7 @@ class Battery:
         hour = self.time_machine.get_hour()
         se = self.__harvest_the_solar_energy(hour)
         self.__consume_energy(process_load, renewable_energy_ratio)
+        # print("fossil:{}\tren:{}".format(self.fm.fossil_energy_consumption, self.fm.ren_energy_consumption))
         self.__record_the_current_status(self.time_machine.get_day_of_the_year(), hour, se)
         return self.remaining_energy
 
